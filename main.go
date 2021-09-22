@@ -139,6 +139,7 @@ func estimate_llc_size() int {
 	return convergedSizes[maxSlope(xys)]
 }
 
+// formats the bytes to IEC format
 func formatBytes(b int64) string {
 	const unit = 1024
 	if b < unit {
