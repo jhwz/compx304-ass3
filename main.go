@@ -13,51 +13,6 @@ import (
 	"gonum.org/v1/plot/vg/draw"
 )
 
-func formatBytes(b int64) string {
-	const unit = 1024
-	if b < unit {
-		return fmt.Sprintf("%d B", b)
-	}
-	div, exp := int64(unit), 0
-	for n := b / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %ciB",
-		float64(b)/float64(div), "KMGTPE"[exp])
-}
-
-type SizeTicks struct {
-	Sizes []int
-}
-
-func (t SizeTicks) Ticks(min, max float64) []plot.Tick {
-	ticks := make([]plot.Tick, 0, len(t.Sizes))
-	for _, size := range t.Sizes {
-		ticks = append(ticks, plot.Tick{Value: float64(size), Label: formatBytes(int64(size))})
-	}
-
-	return ticks
-}
-
-type DurationTicks struct {
-}
-
-func (t DurationTicks) Ticks(min, max float64) []plot.Tick {
-
-	ticks := plot.DefaultTicks{}.Ticks(min, max)
-	for i := range ticks {
-		tick := &ticks[i]
-		if tick.Label == "" {
-			continue
-		}
-		value, _ := strconv.ParseFloat(tick.Label, 64)
-
-		tick.Label = time.Duration(value).String()
-	}
-	return ticks
-}
-
 func main() {
 
 	var CPU = cpuid.CPU
@@ -160,4 +115,51 @@ func estimate_llc_size() int {
 	plotXYs("second", xys, convergedSizes)
 
 	return convergedSizes[maxSlope(xys)+1]
+}
+
+func formatBytes(b int64) string {
+	const unit = 1024
+	if b < unit {
+		return fmt.Sprintf("%d B", b)
+	}
+	div, exp := int64(unit), 0
+	for n := b / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %ciB",
+		float64(b)/float64(div), "KMGTPE"[exp])
+}
+
+// Helper functions for the plotting
+
+type SizeTicks struct {
+	Sizes []int
+}
+
+func (t SizeTicks) Ticks(min, max float64) []plot.Tick {
+	ticks := make([]plot.Tick, 0, len(t.Sizes))
+	for _, size := range t.Sizes {
+		ticks = append(ticks, plot.Tick{Value: float64(size), Label: formatBytes(int64(size))})
+	}
+
+	return ticks
+}
+
+type DurationTicks struct {
+}
+
+func (t DurationTicks) Ticks(min, max float64) []plot.Tick {
+
+	ticks := plot.DefaultTicks{}.Ticks(min, max)
+	for i := range ticks {
+		tick := &ticks[i]
+		if tick.Label == "" {
+			continue
+		}
+		value, _ := strconv.ParseFloat(tick.Label, 64)
+
+		tick.Label = time.Duration(value).String()
+	}
+	return ticks
 }
