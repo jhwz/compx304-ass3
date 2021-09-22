@@ -32,18 +32,34 @@ func estimate_llc_size() int {
 	// It should also handle the issues with cachelines.
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	testRange := func(sizes []int) plotter.XYs {
-		const iterations = 1024 * 1024 * 16
+	// This type encompasses an entire cache line (assuming a cacheLineSize of 64 bytes).
+	// Using an array of these will force each access to be in a new cacheline.
+	type cacheLine64 struct {
+		a int64 // 8 bytes
+		_ int64 // 16 bytes
+		_ int64 // 24 bytes
+		_ int64 // 32 bytes
+		_ int64 // 40 bytes
+		_ int64 // 48 bytes
+		_ int64 // 56 bytes
+		_ int64 // 64 bytes
+	}
+
+	// testRange tests the sizes given and records them in
+	// the results array. It accesses random values in the array and
+	// increments them so some operation is performed.
+	//
+	// The resulting array maps each size to the average execution time for each operation
+	testRange := func(sizes []int, iterations int) plotter.XYs {
 
 		xys := make(plotter.XYs, 0, len(sizes))
 		for _, size := range sizes {
-			// an int32 is 4 bytes, so we allocate size / 4
-			arr := make([]int32, size/4)
+			arr := make([]cacheLine64, size/64)
 			arrLength := len(arr)
 
 			start := time.Now()
 			for i := 0; i < iterations; i++ {
-				arr[r.Int()%arrLength]++
+				arr[r.Int()%arrLength].a++
 			}
 			elapsed := time.Since(start)
 			fmt.Printf("Array size: %-16s Duration: %s\n", formatBytes(int64(size)), elapsed)
@@ -56,6 +72,9 @@ func estimate_llc_size() int {
 		return xys
 	}
 
+	// plotXYs is a nice helper function which plots the output from testRange
+	// and saves it to a file. Helpful for debugging and seeing what the program is
+	// seeing!
 	plotXYs := func(filename string, xys plotter.XYs, sizes []int) {
 		p := plot.New()
 		p.Title.Text = "Average access time for different sized arrays"
@@ -76,6 +95,8 @@ func estimate_llc_size() int {
 		}
 	}
 
+	// Max slope doesn't actually return the max slope, it returns the index of the point
+	// which is steepest
 	maxSlope := func(xys plotter.XYs) int {
 		// Figure out where the largest step was, just using the time differences don't worry about the X value
 		max := 0.0
@@ -97,12 +118,13 @@ func estimate_llc_size() int {
 		sizes = append(sizes, sizes[len(sizes)-1]*2)
 	}
 
-	xys := testRange(sizes)
-	plotXYs("first", xys, sizes)
+	xys := testRange(sizes, 8_000_000)
+	plotXYs("step1", xys, sizes)
 
 	// Find the range with the largest difference, only regarding Y axis
 	maxPos := maxSlope(xys)
 
+	fmt.Printf("\nConverging on range %s-%s\n", formatBytes(int64(sizes[maxPos])), formatBytes(int64(sizes[maxPos+1])))
 	// Create a new sizes array, converging on that range but using a linear scale
 	sizeRange := sizes[maxPos+1] - sizes[maxPos]
 	const linearSteps = 8
@@ -111,10 +133,10 @@ func estimate_llc_size() int {
 	for i := 0; i < linearSteps; i++ {
 		convergedSizes[i] = sizes[maxPos] + i*stepSize
 	}
-	xys = testRange(convergedSizes)
-	plotXYs("second", xys, convergedSizes)
+	xys = testRange(convergedSizes, 32_000_000)
+	plotXYs("step2", xys, convergedSizes)
 
-	return convergedSizes[maxSlope(xys)+1]
+	return convergedSizes[maxSlope(xys)]
 }
 
 func formatBytes(b int64) string {
